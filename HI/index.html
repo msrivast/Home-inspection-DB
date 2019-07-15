@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Home Inspection</title>
+    <meta name="viewport" content="initial-scale=1.0">
+    <meta charset="utf-8">
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #floating-panel {
+        position: absolute;
+        top: 10px;
+        left: 25%;
+        z-index: 5;
+        background-color: #fff;
+        padding: 5px;
+        border: 1px solid #999;
+        text-align: center;
+        font-family: 'Roboto','sans-serif';
+        line-height: 30px;
+        padding-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="form">
+      <table>
+      Address:<input type='text' id='address'/> </br>
+      <!--<form id = "form"action="add_file.php" method="post" enctype="multipart/form-data">-->
+      <tr><td> <input type="file" name="uploaded_file" id = 'file'><br>
+      <input type='button' value='Save' onclick='saveData()'/>
+      </table>
+      <progress id="progressBar" value="0" max="100" style="width:300px;"></progress>
+    </div>
+    <div id="message">Location saved</div>
+    <div id="floating-panel">
+      <input id="gcaddress" type="textbox" value="">
+      <input id="submit" type="button" value="Geocode">
+    </div>
+    <script>
+      var map;
+      var newmarker;
+      var formwindow;
+      var messagewindow;
+      var updatedwindow;
+      var formwindowlistener;
+      /*
+      var circle = {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: 'red',
+        fillOpacity: .4,
+        scale: 4.5,
+        strokeColor: 'white',
+        strokeWeight: 1
+      };
+      */
+      
+      function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: {lat: 35.9940, lng: -78.8986},
+          zoom: 11
+        });
+        
+        var geocoder = new google.maps.Geocoder();
+
+        document.getElementById('submit').addEventListener('click', function() {
+          geocodeAddress(geocoder, map);
+        });
+        
+
+        var infoWindow = new google.maps.InfoWindow;
+        var existingmarkers=[];
+        downloadUrl('http://localhost/hi/phpsqlinfo_getrows.php', function(data) {
+        //downloadUrl('https://storage.googleapis.com/mapsdevsite/json/mapmarkers2.xml', function(data) {
+            var xml = data.responseXML;
+            var markers = xml.documentElement.getElementsByTagName('marker');
+            Array.prototype.forEach.call(markers, function(markerElem) {
+              var id = markerElem.getAttribute('id');
+              var address = markerElem.getAttribute('address');
+              /*
+              var point = new google.maps.LatLng(
+                  parseFloat(markerElem.getAttribute('lat')),
+                  parseFloat(markerElem.getAttribute('lng')));
+              */
+              var point = {lat: parseFloat(markerElem.getAttribute('lat')), lng: parseFloat(markerElem.getAttribute('lng'))};
+              var infowincontent = document.createElement('div');
+              var strong = document.createElement('strong');
+              strong.textContent = address;
+              infowincontent.appendChild(strong);
+              //infowincontent.appendChild(document.createElement('br'));
+              
+
+              downloadUrl('http://localhost/hi/file_list.php?&parent_id=' + id, function(fileData){
+                var text = fileData.response;
+                //infowincontent.innerHTML = text;
+                infowincontent.insertAdjacentHTML('beforeend', text);
+              });
+              //var text = document.createElement('text');
+              //text.textContent = address
+              
+              //infowincontent.appendChild(text);
+              
+              var marker = new google.maps.Marker({
+               
+               // map: map,
+                position: point,
+                icon: 'https://storage.googleapis.com/support-kms-prod/SNP_2752125_en_v0'
+              });
+              //console.log(marker.position);
+              
+              marker.addListener('click', function() {
+                infoWindow.setContent(infowincontent);
+                infoWindow.open(map, marker);
+              });
+              
+              //add marker to existing markers
+              existingmarkers.push(marker);
+              
+            });
+            markerCluster.addMarkers(existingmarkers);
+        });
+        //console.log(existingmarkers);
+        var markerCluster = new MarkerClusterer(map, [],{imagePath: 'http://localhost/hi/m/m'});
+        //var markerCluster = new MarkerClusterer(map, existingmarkers);
+        //console.log('Marker cluster is empty');
+        formwindow = new google.maps.InfoWindow({
+          
+          content: document.getElementById('form')
+          
+        });
+        
+        messagewindow = new google.maps.InfoWindow({
+          content: document.getElementById('message')
+        });
+        
+        /*
+        google.maps.event.addListener(map, 'click', function(event) {
+          if (newmarker != null){
+            newmarker.setMap(null);
+          }
+          newmarker = new google.maps.Marker({
+            position: event.latLng,
+            map: map
+          });
+          
+          formwindowlistener = google.maps.event.addListener(newmarker, 'click', function() {
+            //document.getElementById("form").style.display = "block";
+            formwindow.open(map, newmarker);
+          });
+          
+        });
+        */
+
+      }
+      function geocodeAddress(geocoder, resultsMap) {
+        var address = document.getElementById('gcaddress').value;
+        geocoder.geocode({'address': address}, function(results, status) {
+          if (status === 'OK') {
+            resultsMap.setCenter(results[0].geometry.location);
+            if (newmarker != null){
+              newmarker.setMap(null);
+            }
+            newmarker = new google.maps.Marker({
+              map: resultsMap,
+              position: results[0].geometry.location
+            });
+            formwindowlistener = google.maps.event.addListener(newmarker, 'click', function() {
+            //document.getElementById("form").style.display = "block";
+            formwindow.open(map, newmarker);
+            });
+          } else {
+            alert('Geocode was not successful for the following reason: ' + status);
+          }
+        });
+      }
+      
+      function saveData() {
+        console.log('savedata()');
+        var address = escape(document.getElementById('address').value);
+        var latlng = newmarker.getPosition();
+        var url = 'phpsqlinfo_addrow.php?&address=' + address + '&lat=' + latlng.lat() + '&lng=' + latlng.lng();
+        
+        downloadUrl(url, function(data, responseCode) {
+            
+          //if (responseCode == 200 && data.responseText.length <= 1) {
+            if (responseCode == 200) { //This is not enough and more checks need to be added
+            
+            
+            postFile(data.responseText, "http://localhost/hi/add_file.php", function(postResponse, postResponseCode){
+              if (postResponseCode == 200) {
+                //Call marker update procedure
+                var infowincontent = document.createElement('div');
+                downloadUrl('http://localhost/hi/file_list.php?&parent_id=' + data.responseText, function(fileData){
+                //Hyper local variable scope
+                
+                var strong = document.createElement('strong');
+                strong.textContent = address;
+                infowincontent.appendChild(strong);
+                var text = fileData.response;
+                //infowincontent.innerHTML = text;
+                infowincontent.insertAdjacentHTML('beforeend', text);
+                });
+                console.log('file posted');
+                //de-link previous event listener
+                google.maps.event.removeListener(formwindowlistener);
+                //link new event listener
+                updatedwindow = new google.maps.InfoWindow;
+                google.maps.event.addListener(newmarker, 'click', function() {
+                updatedwindow.setContent(infowincontent);
+                updatedwindow.open(map, newmarker);
+            });
+              formwindow.close();
+              messagewindow.open(map, newmarker);
+              }
+            });
+            //document.getElementById('name').value = ""; //P1
+            document.getElementById('address').value = ""; 
+            //formwindow.close();
+            //messagewindow.open(map, newmarker);
+            
+          }
+        });
+      }
+      function downloadUrl(url, callback) { //P2
+        //var request = window.ActiveXObject ?
+        //    new ActiveXObject('Microsoft.XMLHTTP') :
+        //    new XMLHttpRequest;
+        
+        var request = new XMLHttpRequest;
+        request.onreadystatechange = function() {
+          if (request.readyState == 4) {
+            request.onreadystatechange = doNothing;
+            callback(request, request.status);
+          }
+        };
+
+        request.open('GET', url, true);
+        request.send(null);
+      }
+
+      function doNothing () {
+      }
+      
+      function postFile(id, url, callback) { //P2
+        //var request = window.ActiveXObject ?
+        //    new ActiveXObject('Microsoft.XMLHTTP') :
+        //    new XMLHttpRequest;
+        console.log('postFile()')
+        var file = document.getElementById('file');
+        var request = new XMLHttpRequest;
+        /*
+        request.addEventListener('progress', function(e) {
+            var done = e.position || e.loaded, total = e.totalSize || e.total;
+            console.log('request progress: ' + (Math.floor(done/total*1000)/10) + '%');
+            }, false);
+            
+        if ( request.upload ) {
+            request.upload.onprogress = function(e) {
+                var done = e.position || e.loaded, total = e.totalSize || e.total;
+                percent = Math.floor(done/total*1000)/10;
+                console.log('request.upload progress: ' + done + ' / ' + total + ' = ' + (Math.floor(done/total*1000)/10) + '%');
+                document.getElementById('progressBar').value = Math.round(percent);
+            };
+        }
+        */
+        request.upload.addEventListener("progress", function(e) {
+            var percent = (e.loaded / e.total) * 100;
+            console.log(percent);
+            document.getElementById("progressBar").value = Math.round(percent);
+        },false);
+        request.onreadystatechange = function() {
+          if (request.readyState == 4) {
+            request.onreadystatechange = doNothing;
+            callback(request, request.status);
+          }
+        };
+        var formData = new FormData();
+        formData.append('parent_id', id);
+        formData.append('uploaded_file', file.files[0]);
+        request.open("POST", url, true);
+        request.send(formData);
+      }
+
+      function doNothing () {
+      }
+
+      
+    </script>
+    <script src="http://localhost/hi/markerclusterer.js">
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB0i-Zd1jKpG7SB-J2JaV4r-5Toz_Xj2II&callback=initMap"
+    async defer></script>
+  </body>
+</html>
